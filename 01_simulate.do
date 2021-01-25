@@ -15,40 +15,52 @@ This file calls 00_simulateData
 clear 
 set more off
 
-cap global path "C:\Users\u0908787\Dropbox\Research Projects\r\RinggenbergSeegert\code"
-cap global table_path "C:\Users\u0908787\Dropbox\Research Projects\r\RinggenbergSeegert\table"
-cap cd "C:\Users\u0908787\Dropbox\Research Projects\r\RinggenbergSeegert\code"
+
+global path ""
+global table_path "./table" 
 
 
-cap global path "F:\Dropbox\Research Projects\r\RinggenbergSeegert\code"
-cap global table_path "F:\Dropbox\Research Projects\r\RinggenbergSeegert\table"
-cap cd "F:\Dropbox\Research Projects\r\RinggenbergSeegert\code"
+capture program drop logoneplus 
+  do logoneplus 
 
-capture program drop logoneplus
-  do logoneplus
 
-set obs 100000
+
+*-----------------------------------------------------------------------------*
+*           Generate matrix to keep track of results 
+*-----------------------------------------------------------------------------*
+ *reset file to save results in
+	use coef_boot, clear
+	save coef_results, replace
+	
+*set up file for simulation	
+	clear
+	set obs 1000
 
 *-----------------------------------------------------------------------------*
 *           Generate independent variables 
 *-----------------------------------------------------------------------------*
+
 		gen x1 = (rnormal() + 10)
-		gen x2 = (rnormal() + 10)
-		gen bx3 = (rnormal() + 10)
-		gen eps = 0.01*rnormal()
+		gen index = _n
+		gen k1 = index + x1
+		save k, replace
+		
 
 *-----------------------------------------------------------------------------*
 *           Generate dependent variables
-*-----------------------------------------------------------------------------*		
-	*generate y by exponentiating the log function	
-		gen logy = 2 + 4*x1 + 6*x2 + eps
-		gen y_i = exp(logy)
-		drop logy
-	*generate y as the multiplication of independent variables		
-		*gen y_i = 2*(exp(x1)^4)*(exp(x2)^6)*eps
+*-----------------------------------------------------------------------------*	
+	forvalues i = 1(1)100 {
+	 
+	 cap clear mat eresults
+	 
 	
-	*generate y_i as a linear function
-		*gen y_i = 2 + 4*x1 + 6*x2 + eps
+	cap drop y_i k logy y_logplus y_ihs y_doubleneg
+	
+	*generate y by exponentiating the log function	
+		gen k = `i' + x1
+		gen y_i = rgamma(k, 1)
+	
+	
 
 	
 *-----------------------------------------------------------------------------*
@@ -56,11 +68,56 @@ set obs 100000
 *-----------------------------------------------------------------------------*	
 	
 	*give the program the dependent variable and any list of independent variables
-		logoneplus y_i x1 x2 
+		logoneplus y_i x1 
+ 
+	preserve	
+		mat model = eresults'
+		svmat model
+		keep model*
+		gen model_type = `i'
+	
+		keep if _n ==1
+		append using coef_results
+ 
+		save coef_results, replace
+	restore
+	}
+	 
+	 use coef_results, clear
 
 
-		
+save coef_results_1, replace
+	 
+*merge dataset
+
+gen index= _n
+
+merge 1:1 index using "k.dta"
+
+keep if _merge==3
+
+save coef_results_1, replace
+
+*graphing
+
+forvalues i = 1(1)5 {
+
+twoway line model`i' k1
+
+save "model`i'.gph", replace
+
+}
+
+graph combine model1.gph model2.gph model3.gph model4.gph model5.gph
+
+twoway line model1 model2 model3 model4 model5 k1
+
+
+
+
+	 
 stop		
+		
 *-----------------------------------------------------------------------------*
 *          Try power expansion
 *-----------------------------------------------------------------------------*	
